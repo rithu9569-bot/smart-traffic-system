@@ -9,55 +9,36 @@ CORS(app)
 
 @app.route('/')
 def index():
-    return jsonify({
-        "status": "online",
-        "system": "Smart AI Traffic System",
-        "endpoints": {
-            "video_feed": "/video_feed",
-            "health": "/api/health",
-            "emergency": "/api/emergency"
-        }
-    }), 200
+    return jsonify({"status": "online", "system": "Smart Traffic AI Command Center"}), 200
 
 @app.route('/api/health')
 def health_check():
     return jsonify({"status": "healthy"}), 200
 
 def generate_frames():
-    # Detect video file in backend directory
-    video_filename = 'sample_traffic.mp4'
-    video_path = os.path.join(os.path.dirname(__file__), video_filename)
+    # Use reliable public MP4 traffic stream or local file
+    video_source = "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4"
+    local_path = os.path.join(os.path.dirname(__file__), 'sample_traffic.mp4')
     
-    # If file name varies, attempt to pick any .mp4 file in backend/
-    if not os.path.exists(video_path):
-        for file in os.listdir(os.path.dirname(__file__)):
-            if file.endswith('.mp4'):
-                video_path = os.path.join(os.path.dirname(__file__), file)
-                break
+    if os.path.exists(local_path):
+        video_source = local_path
 
-    cap = cv2.VideoCapture(video_path)
+    cap = cv2.VideoCapture(video_source)
 
     while True:
         success, frame = cap.read()
-        
-        # Loop video automatically when it reaches the end
         if not success or frame is None:
             cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
             continue
 
-        # Resize for smooth bandwidth streaming
         frame = cv2.resize(frame, (640, 360))
-
         ret, buffer = cv2.imencode('.jpg', frame, [int(cv2.IMWRITE_JPEG_QUALITY), 80])
         if not ret:
             continue
-            
-        frame_bytes = buffer.tobytes()
+
         yield (b'--frame\r\n'
-               b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
-        
-        # Frame timing delay (~25 FPS)
-        time.sleep(0.04)
+               b'Content-Type: image/jpeg\r\n\r\n' + buffer.tobytes() + b'\r\n')
+        time.sleep(0.03)
 
 @app.route('/video_feed')
 def video_feed():
@@ -65,12 +46,7 @@ def video_feed():
 
 @app.route('/api/emergency', methods=['POST'])
 def trigger_emergency():
-    data = request.get_json() or {}
-    lane_id = data.get('lane_id', 'Junction Node #1')
-    return jsonify({
-        "success": True, 
-        "message": f"🚨 Emergency priority granted to {lane_id}!"
-    }), 200
+    return jsonify({"success": True, "message": "Emergency priority activated"}), 200
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
