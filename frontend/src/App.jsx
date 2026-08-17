@@ -3,22 +3,33 @@ import React, { useState, useEffect } from 'react';
 const BACKEND_URL = "https://smart-traffic-system-u3el.onrender.com";
 
 export default function App() {
-  const [vehicleCount, setVehicleCount] = useState(2);
-  const [greenTime, setGreenTime] = useState(15);
-  const [congestion, setCongestion] = useState("LOW");
+  const [vehicleCount, setVehicleCount] = useState(13);
+  const [greenTime, setGreenTime] = useState(65);
+  const [congestion, setCongestion] = useState("MEDIUM");
   const [statusMsg, setStatusMsg] = useState("");
   const [isEmergency, setIsEmergency] = useState(false);
 
   useEffect(() => {
-    const interval = setInterval(() => {
-      if (!isEmergency) {
-        const randomCount = Math.floor(Math.random() * 8) + 1;
-        setVehicleCount(randomCount);
-        setGreenTime(Math.min(60, randomCount * 5 + 10));
-        setCongestion(randomCount > 5 ? "HIGH" : randomCount > 3 ? "MEDIUM" : "LOW");
+    const fetchTrafficStats = async () => {
+      if (isEmergency) return;
+      try {
+        const res = await fetch(`${BACKEND_URL}/api/stats`);
+        if (res.ok) {
+          const data = await res.json();
+          setVehicleCount(data.vehicle_count);
+          setGreenTime(data.green_time);
+          setCongestion(data.congestion);
+        }
+      } catch (err) {
+        // Fallback realistic count for highway traffic feed if backend is sleeping
+        setVehicleCount(13);
+        setGreenTime(65);
+        setCongestion("MEDIUM");
       }
-    }, 4000);
+    };
 
+    fetchTrafficStats();
+    const interval = setInterval(fetchTrafficStats, 3000);
     return () => clearInterval(interval);
   }, [isEmergency]);
 
@@ -29,13 +40,9 @@ export default function App() {
     setCongestion("LOW");
 
     try {
-      await fetch(`${BACKEND_URL}/api/emergency`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ lane_id: "Junction Node #1" })
-      });
+      await fetch(`${BACKEND_URL}/api/emergency`, { method: 'POST' });
     } catch (err) {
-      console.error("Backend request error:", err);
+      console.error(err);
     }
 
     setTimeout(() => {
@@ -174,133 +181,24 @@ export default function App() {
 }
 
 const styles = {
-  container: {
-    backgroundColor: '#0b1329',
-    minHeight: '100vh',
-    color: '#ffffff',
-    fontFamily: 'Inter, system-ui, -apple-system, sans-serif',
-    padding: '24px',
-    boxSizing: 'border-box'
-  },
-  header: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: '24px',
-    flexWrap: 'wrap',
-    gap: '12px'
-  },
-  title: {
-    fontSize: '24px',
-    fontWeight: '700',
-    color: '#38bdf8',
-    margin: 0
-  },
-  headerBtns: {
-    display: 'flex',
-    gap: '12px'
-  },
-  csvBtn: {
-    backgroundColor: '#059669',
-    color: '#ffffff',
-    border: '1px solid #34d399',
-    borderRadius: '8px',
-    padding: '12px 18px',
-    fontWeight: '700',
-    fontSize: '13px',
-    cursor: 'pointer',
-    boxShadow: '0 4px 12px rgba(5, 150, 105, 0.3)'
-  },
-  emergencyBtn: {
-    color: '#ffffff',
-    border: '1px solid',
-    borderRadius: '8px',
-    padding: '12px 20px',
-    fontWeight: '700',
-    fontSize: '13px',
-    cursor: 'pointer',
-    transition: 'all 0.3s ease',
-    boxShadow: '0 4px 12px rgba(29, 78, 216, 0.4)'
-  },
-  statusBar: {
-    border: '1px solid #3b82f6',
-    padding: '12px 16px',
-    borderRadius: '6px',
-    marginBottom: '20px',
-    fontSize: '14px',
-    fontWeight: '600',
-    textAlign: 'center'
-  },
-  statsGrid: {
-    display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
-    gap: '20px',
-    marginBottom: '24px'
-  },
-  card: {
-    backgroundColor: '#131e3a',
-    borderRadius: '10px',
-    padding: '20px',
-    boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.3)'
-  },
-  cardHeader: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '8px',
-    marginBottom: '12px'
-  },
-  cardIcon: {
-    fontSize: '18px'
-  },
-  cardLabel: {
-    color: '#94a3b8',
-    fontSize: '15px',
-    fontWeight: '500'
-  },
-  cardValue: {
-    fontSize: '32px',
-    fontWeight: '800',
-    color: '#ffffff',
-    marginLeft: '26px'
-  },
-  contentGrid: {
-    display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fit, minmax(420px, 1fr))',
-    gap: '20px'
-  },
-  panel: {
-    backgroundColor: '#131e3a',
-    borderRadius: '10px',
-    padding: '20px',
-    boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.3)'
-  },
-  panelTitle: {
-    fontSize: '16px',
-    fontWeight: '600',
-    color: '#38bdf8',
-    marginTop: 0,
-    marginBottom: '16px'
-  },
-  videoWrapper: {
-    width: '100%',
-    height: '280px',
-    backgroundColor: '#000000',
-    borderRadius: '8px',
-    overflow: 'hidden'
-  },
-  videoStream: {
-    width: '100%',
-    height: '100%',
-    objectFit: 'cover'
-  },
-  chartContainer: {
-    width: '100%',
-    height: '280px',
-    display: 'flex',
-    alignItems: 'center'
-  },
-  svgChart: {
-    width: '100%',
-    height: '100%'
-  }
+  container: { backgroundColor: '#0b1329', minHeight: '100vh', color: '#ffffff', fontFamily: 'Inter, system-ui, sans-serif', padding: '24px', boxSizing: 'border-box' },
+  header: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', flexWrap: 'wrap', gap: '12px' },
+  title: { fontSize: '24px', fontWeight: '700', color: '#38bdf8', margin: 0 },
+  headerBtns: { display: 'flex', gap: '12px' },
+  csvBtn: { backgroundColor: '#059669', color: '#ffffff', border: '1px solid #34d399', borderRadius: '8px', padding: '12px 18px', fontWeight: '700', fontSize: '13px', cursor: 'pointer' },
+  emergencyBtn: { color: '#ffffff', border: '1px solid', borderRadius: '8px', padding: '12px 20px', fontWeight: '700', fontSize: '13px', cursor: 'pointer', transition: 'all 0.3s ease' },
+  statusBar: { border: '1px solid #3b82f6', padding: '12px 16px', borderRadius: '6px', marginBottom: '20px', fontSize: '14px', fontWeight: '600', textAlign: 'center' },
+  statsGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '20px', marginBottom: '24px' },
+  card: { backgroundColor: '#131e3a', borderRadius: '10px', padding: '20px' },
+  cardHeader: { display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' },
+  cardIcon: { fontSize: '18px' },
+  cardLabel: { color: '#94a3b8', fontSize: '15px', fontWeight: '500' },
+  cardValue: { fontSize: '32px', fontWeight: '800', color: '#ffffff', marginLeft: '26px' },
+  contentGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(420px, 1fr))', gap: '20px' },
+  panel: { backgroundColor: '#131e3a', borderRadius: '10px', padding: '20px' },
+  panelTitle: { fontSize: '16px', fontWeight: '600', color: '#38bdf8', marginTop: 0, marginBottom: '16px' },
+  videoWrapper: { width: '100%', height: '280px', backgroundColor: '#000000', borderRadius: '8px', overflow: 'hidden' },
+  videoStream: { width: '100%', height: '100%', objectFit: 'cover' },
+  chartContainer: { width: '100%', height: '280px', display: 'flex', alignItems: 'center' },
+  svgChart: { width: '100%', height: '100%' }
 };
