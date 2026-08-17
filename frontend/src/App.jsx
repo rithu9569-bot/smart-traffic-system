@@ -1,8 +1,6 @@
 import React, { useState, useEffect } from 'react';
 
 const BACKEND_URL = "https://smart-traffic-system-u3el.onrender.com";
-// Direct reliable traffic video URL
-const VIDEO_SRC = "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4";
 
 export default function App() {
   const [vehicleCount, setVehicleCount] = useState(2);
@@ -125,11 +123,12 @@ export default function App() {
           <h2 style={styles.panelTitle}>📹 Live Camera Feed — Junction Node #1</h2>
           <div style={styles.videoWrapper}>
             <video
-              src={VIDEO_SRC}
+              src="/sample_traffic.mp4"
               autoPlay
               loop
               muted
               playsInline
+              controls
               style={styles.videoStream}
             />
           </div>
