@@ -1,0 +1,20 @@
+# Virtual Environment
+venv/
+
+# Node Dependencies
+node_modules/
+frontend/node_modules/
+iot_simulator/node_modules/
+
+# Sensitive Firebase Keys
+backend/serviceAccountKey.json
+
+# Build Outputs & Temporary Files
+dist/
+build/
+*.pyc
+__pycache__/
+.DS_Store
+# Large Media & AI Weights
+*.mp4
+*.pt
