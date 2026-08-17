@@ -123,7 +123,7 @@ export default function App() {
           <h2 style={styles.panelTitle}>📹 Live Camera Feed — Junction Node #1</h2>
           <div style={styles.videoWrapper}>
             <video
-              src="/sample_traffic.mp4"
+              src={`${import.meta.env.BASE_URL}sample_traffic.mp4`}
               autoPlay
               loop
               muted
