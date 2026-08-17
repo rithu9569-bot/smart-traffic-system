@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 
 const BACKEND_URL = "https://smart-traffic-system-u3el.onrender.com";
+// Direct reliable traffic video URL
+const VIDEO_SRC = "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4";
 
 export default function App() {
   const [vehicleCount, setVehicleCount] = useState(2);
@@ -9,7 +11,6 @@ export default function App() {
   const [statusMsg, setStatusMsg] = useState("");
   const [isEmergency, setIsEmergency] = useState(false);
 
-  // Dynamic traffic updates
   useEffect(() => {
     const interval = setInterval(() => {
       if (!isEmergency) {
@@ -23,7 +24,6 @@ export default function App() {
     return () => clearInterval(interval);
   }, [isEmergency]);
 
-  // Trigger Emergency Priority Action
   const triggerEmergency = async () => {
     setIsEmergency(true);
     setStatusMsg("🚨 EMERGENCY OVERRIDE ACTIVATED — GREEN WAVE GRANTED FOR JUNCTION NODE #1");
@@ -37,7 +37,7 @@ export default function App() {
         body: JSON.stringify({ lane_id: "Junction Node #1" })
       });
     } catch (err) {
-      console.error("Backend warning:", err);
+      console.error("Backend request error:", err);
     }
 
     setTimeout(() => {
@@ -46,7 +46,6 @@ export default function App() {
     }, 10000);
   };
 
-  // CSV Export Action
   const exportCSV = () => {
     const timestamp = new Date().toISOString();
     const csvContent = `data:text/csv;charset=utf-8,Timestamp,Junction,Vehicle_Count,Green_Signal_Sec,Congestion_Level\n${timestamp},Junction Node #1,${vehicleCount},${greenTime},${congestion}\n`;
@@ -61,7 +60,6 @@ export default function App() {
 
   return (
     <div style={styles.container}>
-      {/* Header Bar */}
       <header style={styles.header}>
         <h1 style={styles.title}>Smart Traffic AI Command Center</h1>
         <div style={styles.headerBtns}>
@@ -91,7 +89,6 @@ export default function App() {
         </div>
       )}
 
-      {/* Top Stat Cards */}
       <div style={styles.statsGrid}>
         <div style={{ ...styles.card, borderLeft: '4px solid #3b82f6' }}>
           <div style={styles.cardHeader}>
@@ -123,21 +120,21 @@ export default function App() {
         </div>
       </div>
 
-      {/* Content Grid */}
       <div style={styles.contentGrid}>
-        {/* Live Camera Feed Panel */}
         <div style={styles.panel}>
           <h2 style={styles.panelTitle}>📹 Live Camera Feed — Junction Node #1</h2>
           <div style={styles.videoWrapper}>
-            <img
-              src={`${BACKEND_URL}/video_feed`}
-              alt="Live Traffic Feed"
+            <video
+              src={VIDEO_SRC}
+              autoPlay
+              loop
+              muted
+              playsInline
               style={styles.videoStream}
             />
           </div>
         </div>
 
-        {/* Traffic Volume Trends Chart */}
         <div style={styles.panel}>
           <h2 style={styles.panelTitle}>📈 Realtime Traffic Volume Trends</h2>
           <div style={styles.chartContainer}>
