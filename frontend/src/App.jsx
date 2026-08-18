@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 
 // Replace with your live Render backend URL or localhost during development
-const BACKEND_URL = "https://smart-traffic-system-1.onrender.com";
+const BACKEND_URL = "https://smart-traffic-system-1-pqtm.onrender.com";
 
 export default function App() {
   const [vehicleCount, setVehicleCount] = useState(0);
