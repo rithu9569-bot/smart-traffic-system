@@ -36,22 +36,22 @@ pipeline = MultiJunctionPipeline()
 
 def generate_video_stream(junction_id):
     base_dir = os.path.dirname(os.path.abspath(__file__))
-    local_node1 = os.path.join(base_dir, 'sample_traffic.mp4')
+    local_path = os.path.join(base_dir, 'sample_traffic.mp4')
 
-    # Direct fallback video streams guaranteed to work on cloud servers
+    # Direct online MP4 traffic streams that always work on cloud servers
     online_streams = {
-        "node_1": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4",
-        "node_2": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4",
-        "node_3": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerFun.mp4"
+        "node_1": "https://raw.githubusercontent.com/intel-iot-devkit/sample-videos/master/car-detection.mp4",
+        "node_2": "https://raw.githubusercontent.com/intel-iot-devkit/sample-videos/master/free-way-traffic.mp4",
+        "node_3": "https://raw.githubusercontent.com/intel-iot-devkit/sample-videos/master/traffic.mp4"
     }
 
-    # Use local file if valid, otherwise fallback to direct HTTPS video stream
-    if junction_id == "node_1" and os.path.exists(local_node1) and os.path.getsize(local_node1) > 100000:
-        source = local_node1
+    # Check if local video exists and is a full file (>1MB), otherwise fallback to web URL
+    if junction_id == "node_1" and os.path.exists(local_path) and os.path.getsize(local_path) > 1000000:
+        video_source = local_path
     else:
-        source = online_streams.get(junction_id, online_streams["node_1"])
+        video_source = online_streams.get(junction_id, online_streams["node_1"])
 
-    cap = cv2.VideoCapture(source)
+    cap = cv2.VideoCapture(video_source)
     bg_subtractor = cv2.createBackgroundSubtractorMOG2(history=500, varThreshold=25, detectShadows=False)
 
     while True:
@@ -62,7 +62,7 @@ def generate_video_stream(junction_id):
             if not ret or frame is None:
                 cap.release()
                 time.sleep(0.2)
-                cap = cv2.VideoCapture(source)
+                cap = cv2.VideoCapture(video_source)
                 continue
 
         resized = cv2.resize(frame, (640, 360))
