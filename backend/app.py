@@ -6,7 +6,6 @@ from flask import Flask, Response, jsonify
 from flask_cors import CORS
 
 app = Flask(__name__)
-# Enable CORS for all incoming requests (Netlify and local dev)
 CORS(app)
 
 class TrafficPipeline:
@@ -25,8 +24,9 @@ class TrafficPipeline:
             }
 
     def update_stats(self, count):
+        # Calculate signal timing dynamically: 5 seconds per detected vehicle (capped between 15s and 90s)
         calculated_green = min(90, max(15, count * 5))
-        calculated_congestion = "HIGH" if count > 14 else "MEDIUM" if count > 8 else "LOW"
+        calculated_congestion = "HIGH" if count >= 12 else "MEDIUM" if count >= 6 else "LOW"
         
         with self.lock:
             self.vehicle_count = count
@@ -36,53 +36,56 @@ class TrafficPipeline:
 pipeline = TrafficPipeline()
 
 def generate_video_stream():
-    # Resolve video path relative to backend folder or frontend fallback
     base_dir = os.path.dirname(os.path.abspath(__file__))
     video_path = os.path.join(base_dir, 'sample_traffic.mp4')
     if not os.path.exists(video_path):
         video_path = os.path.join(base_dir, '../frontend/public/sample_traffic.mp4')
 
     cap = cv2.VideoCapture(video_path if os.path.exists(video_path) else 0)
-    bg_subtractor = cv2.createBackgroundSubtractorMOG2(history=300, varThreshold=40)
+    
+    # Tuned MOG2 parameters for smaller distant vehicles
+    bg_subtractor = cv2.createBackgroundSubtractorMOG2(history=500, varThreshold=16, detectShadows=False)
 
     while True:
         ret, frame = cap.read()
         if not ret or frame is None:
-            # Restart video loop on completion
             cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
             continue
 
-        # Resize for smooth real-time stream performance
         resized = cv2.resize(frame, (640, 360))
-        fg_mask = bg_subtractor.apply(resized)
-        _, thresh = cv2.threshold(fg_mask, 200, 255, cv2.THRESH_BINARY)
-        contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        
+        # Blur frame to reduce road surface noise
+        blurred = cv2.GaussianBlur(resized, (5, 5), 0)
+        fg_mask = bg_subtractor.apply(blurred)
+        
+        # Morphological operations to merge fragmented vehicle contours
+        kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (5, 5))
+        dilated = cv2.dilate(fg_mask, kernel, iterations=2)
+        
+        contours, _ = cv2.findContours(dilated, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
         active_count = 0
         for cnt in contours:
-            if cv2.contourArea(cnt) > 350:  # Vehicle detection area threshold
+            area = cv2.contourArea(cnt)
+            # Area threshold tuned for highway camera perspective (80px to 4000px)
+            if 80 < area < 4000:
                 x, y, w, h = cv2.boundingRect(cnt)
-                # Draw bounding box and label directly onto video frame
                 cv2.rectangle(resized, (x, y), (x + w, y + h), (0, 255, 0), 2)
-                cv2.putText(resized, "Vehicle", (x, max(15, y - 5)), 
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.45, (0, 255, 0), 1)
+                cv2.putText(resized, f"Car {active_count + 1}", (x, max(15, y - 5)), 
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.4, (0, 255, 0), 1)
                 active_count += 1
 
-        # Push updated metrics to thread pipeline
         pipeline.update_stats(active_count)
 
-        # Encode frame to JPEG format for MJPEG stream
-        ret, buffer = cv2.imencode('.jpg', resized)
+        ret, buffer = cv2.imencode('.jpg', resized, [int(cv2.IMWRITE_JPEG_QUALITY), 80])
         if not ret:
             continue
             
         frame_bytes = buffer.tobytes()
-
-        # Yield HTTP multipart stream chunk
         yield (b'--frame\r\n'
                b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
 
-        time.sleep(0.04)  # Maintain ~25 FPS stream speed
+        time.sleep(0.04)
 
     cap.release()
 

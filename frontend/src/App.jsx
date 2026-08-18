@@ -1,65 +1,41 @@
 import React, { useState, useEffect } from 'react';
 
-// Replace with your live Render backend URL or localhost during development
 const BACKEND_URL = "https://smart-traffic-system-1-pqtm.onrender.com";
 
 export default function App() {
   const [vehicleCount, setVehicleCount] = useState(0);
-  const [greenTime, setGreenTime] = useState(30);
+  const [greenTime, setGreenTime] = useState(15);
   const [congestion, setCongestion] = useState("LOW");
   const [statusMsg, setStatusMsg] = useState("");
   const [isEmergency, setIsEmergency] = useState(false);
 
-  const [trendHistory, setTrendHistory] = useState([
-    { time: "08:11:08 AM", count: 8, green: 40 },
-    { time: "08:11:11 AM", count: 18, green: 85 },
-    { time: "08:11:13 AM", count: 11, green: 55 },
-    { time: "08:11:16 AM", count: 16, green: 75 },
-    { time: "08:11:19 AM", count: 12, green: 60 }
-  ]);
+  const [trendHistory, setTrendHistory] = useState([]);
 
   useEffect(() => {
     const fetchStats = async () => {
       if (isEmergency) return;
 
-      let nextCount = vehicleCount;
-      let nextGreen = greenTime;
-      let nextCongestion = congestion;
-
       try {
         const res = await fetch(`${BACKEND_URL}/api/stats`);
         if (res.ok) {
           const data = await res.json();
-          nextCount = data.vehicle_count;
-          nextGreen = data.green_time;
-          nextCongestion = data.congestion;
-        } else {
-          // Dynamic visual fallback if backend API is offline
-          nextCount = Math.floor(Math.random() * 12) + 5;
-          nextGreen = Math.min(90, Math.max(15, nextCount * 5));
-          nextCongestion = nextCount > 14 ? "HIGH" : nextCount > 8 ? "MEDIUM" : "LOW";
+          setVehicleCount(data.vehicle_count);
+          setGreenTime(data.green_time);
+          setCongestion(data.congestion);
+
+          const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+          setTrendHistory(prev => {
+            const updated = [...prev, { time: timeStr, count: data.vehicle_count, green: data.green_time }];
+            return updated.length > 10 ? updated.slice(1) : updated;
+          });
         }
       } catch (err) {
-        // High-frequency client-side variance fallback
-        nextCount = Math.floor(Math.random() * 12) + 5;
-        nextGreen = Math.min(90, Math.max(15, nextCount * 5));
-        nextCongestion = nextCount > 14 ? "HIGH" : nextCount > 8 ? "MEDIUM" : "LOW";
+        console.error("API error:", err);
       }
-
-      setVehicleCount(nextCount);
-      setGreenTime(nextGreen);
-      setCongestion(nextCongestion);
-
-      const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-      setTrendHistory(prev => {
-        const updated = [...prev, { time: timeStr, count: nextCount, green: nextGreen }];
-        return updated.length > 8 ? updated.slice(1) : updated;
-      });
     };
 
     fetchStats();
-    // Poll metrics every 300ms for fast real-time synchronization
-    const interval = setInterval(fetchStats, 300);
+    const interval = setInterval(fetchStats, 500);
     return () => clearInterval(interval);
   }, [isEmergency]);
 
@@ -93,16 +69,17 @@ export default function App() {
     document.body.removeChild(link);
   };
 
+  // Maps statistical values correctly to SVG pixel coordinates
   const generatePath = (key, maxVal) => {
-    if (trendHistory.length === 0) return "";
+    if (trendHistory.length < 2) return "";
     const startX = 40;
     const endX = 460;
-    const step = (endX - startX) / (trendHistory.length - 1 || 1);
+    const step = (endX - startX) / (trendHistory.length - 1);
 
     return trendHistory.map((pt, i) => {
       const x = startX + i * step;
       const y = 170 - (pt[key] / maxVal) * 140;
-      return `${i === 0 ? 'M' : 'L'} ${x},${y}`;
+      return `${i === 0 ? 'M' : 'L'} ${x},${Math.max(20, Math.min(170, y))}`;
     }).join(' ');
   };
 
@@ -172,15 +149,9 @@ export default function App() {
         <div style={styles.panel}>
           <h2 style={styles.panelTitle}>📹 Live Camera Feed — Junction Node #1</h2>
           <div style={styles.videoWrapper}>
-            {/* Server-side processed MJPEG stream feed */}
             <img
               src={`${BACKEND_URL}/video_feed`}
               alt="Live AI Traffic Feed"
-              onError={(e) => {
-                // Video tag fallback if live stream endpoint is offline
-                e.target.onerror = null;
-                e.target.src = `${import.meta.env.BASE_URL}sample_traffic.mp4`;
-              }}
               style={styles.videoStream}
             />
           </div>
@@ -195,17 +166,19 @@ export default function App() {
               <line x1="40" y1="120" x2="480" y2="120" stroke="#1e293b" strokeDasharray="4" />
               <line x1="40" y1="170" x2="480" y2="170" stroke="#334155" />
 
-              <text x="10" y="25" fill="#64748b" fontSize="12">100</text>
-              <text x="15" y="75" fill="#64748b" fontSize="12">75</text>
-              <text x="15" y="125" fill="#64748b" fontSize="12">50</text>
-              <text x="15" y="175" fill="#64748b" fontSize="12">0</text>
+              <text x="5" y="25" fill="#64748b" fontSize="10">100 (Sec)</text>
+              <text x="5" y="75" fill="#64748b" fontSize="10">50</text>
+              <text x="5" y="125" fill="#64748b" fontSize="10">25 (Cars)</text>
+              <text x="15" y="175" fill="#64748b" fontSize="10">0</text>
 
+              {/* Green signal trend line (Max 100s) */}
               <path
                 d={generatePath('green', 100)}
                 fill="none"
                 stroke="#10b981"
                 strokeWidth="3"
               />
+              {/* Vehicle count trend line (Max 25 cars) */}
               <path
                 d={generatePath('count', 25)}
                 fill="none"
@@ -216,7 +189,7 @@ export default function App() {
               {trendHistory.map((pt, i) => {
                 const step = (420) / (trendHistory.length - 1 || 1);
                 return (
-                  <text key={i} x={40 + i * step - 20} y="195" fill="#64748b" fontSize="10">
+                  <text key={i} x={40 + i * step - 15} y="193" fill="#64748b" fontSize="9">
                     {pt.time}
                   </text>
                 );
