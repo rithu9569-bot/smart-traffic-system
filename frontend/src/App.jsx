@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
 
+// Replace with your live Render backend URL or localhost during development
 const BACKEND_URL = "https://smart-traffic-system-1.onrender.com";
 
 export default function App() {
-  const [vehicleCount, setVehicleCount] = useState(12);
-  const [greenTime, setGreenTime] = useState(60);
-  const [congestion, setCongestion] = useState("MEDIUM");
+  const [vehicleCount, setVehicleCount] = useState(0);
+  const [greenTime, setGreenTime] = useState(30);
+  const [congestion, setCongestion] = useState("LOW");
   const [statusMsg, setStatusMsg] = useState("");
   const [isEmergency, setIsEmergency] = useState(false);
 
@@ -18,17 +19,12 @@ export default function App() {
   ]);
 
   useEffect(() => {
-    const updateRealtimeMetrics = async () => {
+    const fetchStats = async () => {
       if (isEmergency) return;
 
-      // Calculate instant dynamic shifts for fallback/offline mode
-      const simulatedCount = Math.floor(Math.random() * 16) + 5; // Random count between 5 and 20
-      const simulatedGreen = Math.min(90, Math.max(15, simulatedCount * 4 + 10));
-      const simulatedCongestion = simulatedCount > 14 ? "HIGH" : simulatedCount > 9 ? "MEDIUM" : "LOW";
-
-      let nextCount = simulatedCount;
-      let nextGreen = simulatedGreen;
-      let nextCongestion = simulatedCongestion;
+      let nextCount = vehicleCount;
+      let nextGreen = greenTime;
+      let nextCongestion = congestion;
 
       try {
         const res = await fetch(`${BACKEND_URL}/api/stats`);
@@ -37,9 +33,17 @@ export default function App() {
           nextCount = data.vehicle_count;
           nextGreen = data.green_time;
           nextCongestion = data.congestion;
+        } else {
+          // Dynamic visual fallback if backend API is offline
+          nextCount = Math.floor(Math.random() * 12) + 5;
+          nextGreen = Math.min(90, Math.max(15, nextCount * 5));
+          nextCongestion = nextCount > 14 ? "HIGH" : nextCount > 8 ? "MEDIUM" : "LOW";
         }
       } catch (err) {
-        // Fallback directly uses the newly calculated simulated values on every tick
+        // High-frequency client-side variance fallback
+        nextCount = Math.floor(Math.random() * 12) + 5;
+        nextGreen = Math.min(90, Math.max(15, nextCount * 5));
+        nextCongestion = nextCount > 14 ? "HIGH" : nextCount > 8 ? "MEDIUM" : "LOW";
       }
 
       setVehicleCount(nextCount);
@@ -53,9 +57,9 @@ export default function App() {
       });
     };
 
-    updateRealtimeMetrics();
-    // High-frequency polling (400ms) to ensure continuous visual updates
-    const interval = setInterval(updateRealtimeMetrics, 400);
+    fetchStats();
+    // Poll metrics every 300ms for fast real-time synchronization
+    const interval = setInterval(fetchStats, 300);
     return () => clearInterval(interval);
   }, [isEmergency]);
 
@@ -168,13 +172,15 @@ export default function App() {
         <div style={styles.panel}>
           <h2 style={styles.panelTitle}>📹 Live Camera Feed — Junction Node #1</h2>
           <div style={styles.videoWrapper}>
-            <video
-              src={`${import.meta.env.BASE_URL}sample_traffic.mp4`}
-              autoPlay
-              loop
-              muted
-              playsInline
-              controls
+            {/* Server-side processed MJPEG stream feed */}
+            <img
+              src={`${BACKEND_URL}/video_feed`}
+              alt="Live AI Traffic Feed"
+              onError={(e) => {
+                // Video tag fallback if live stream endpoint is offline
+                e.target.onerror = null;
+                e.target.src = `${import.meta.env.BASE_URL}sample_traffic.mp4`;
+              }}
               style={styles.videoStream}
             />
           </div>
