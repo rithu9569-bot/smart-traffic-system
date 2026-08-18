@@ -36,22 +36,22 @@ pipeline = MultiJunctionPipeline()
 
 def generate_video_stream(junction_id):
     base_dir = os.path.dirname(os.path.abspath(__file__))
-    local_path = os.path.join(base_dir, 'sample_traffic.mp4')
-
-    # Direct online MP4 traffic streams that always work on cloud servers
-    online_streams = {
-        "node_1": "https://raw.githubusercontent.com/intel-iot-devkit/sample-videos/master/car-detection.mp4",
-        "node_2": "https://raw.githubusercontent.com/intel-iot-devkit/sample-videos/master/free-way-traffic.mp4",
-        "node_3": "https://raw.githubusercontent.com/intel-iot-devkit/sample-videos/master/traffic.mp4"
+    
+    # Map each node strictly to requested file names
+    node_files = {
+        "node_1": "sample_video.mp4",
+        "node_2": "sample_video_2.mp4",
+        "node_3": "sample_video_3.mp4"
     }
 
-    # Check if local video exists and is a full file (>1MB), otherwise fallback to web URL
-    if junction_id == "node_1" and os.path.exists(local_path) and os.path.getsize(local_path) > 1000000:
-        video_source = local_path
-    else:
-        video_source = online_streams.get(junction_id, online_streams["node_1"])
+    filename = node_files.get(junction_id, "sample_video.mp4")
+    target_path = os.path.join(base_dir, filename)
 
-    cap = cv2.VideoCapture(video_source)
+    # Fallback to sample_traffic.mp4 if sample_video.mp4 files are not found locally
+    if not os.path.exists(target_path):
+        target_path = os.path.join(base_dir, "sample_traffic.mp4")
+
+    cap = cv2.VideoCapture(target_path)
     bg_subtractor = cv2.createBackgroundSubtractorMOG2(history=500, varThreshold=25, detectShadows=False)
 
     while True:
@@ -60,9 +60,7 @@ def generate_video_stream(junction_id):
             cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
             ret, frame = cap.read()
             if not ret or frame is None:
-                cap.release()
-                time.sleep(0.2)
-                cap = cv2.VideoCapture(video_source)
+                time.sleep(0.1)
                 continue
 
         resized = cv2.resize(frame, (640, 360))
