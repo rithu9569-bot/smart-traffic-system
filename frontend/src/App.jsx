@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 const BACKEND_URL = "https://smart-traffic-system-1-pqtm.onrender.com";
 
 export default function App() {
+  const [selectedJunction, setSelectedJunction] = useState("node_1");
   const [vehicleCount, setVehicleCount] = useState(0);
   const [greenTime, setGreenTime] = useState(15);
   const [congestion, setCongestion] = useState("LOW");
@@ -16,7 +17,7 @@ export default function App() {
       if (isEmergency) return;
 
       try {
-        const res = await fetch(`${BACKEND_URL}/api/stats`);
+        const res = await fetch(`${BACKEND_URL}/api/stats?junction=${selectedJunction}`);
         if (res.ok) {
           const data = await res.json();
           setVehicleCount(data.vehicle_count);
@@ -37,11 +38,11 @@ export default function App() {
     fetchStats();
     const interval = setInterval(fetchStats, 500);
     return () => clearInterval(interval);
-  }, [isEmergency]);
+  }, [selectedJunction, isEmergency]);
 
   const triggerEmergency = async () => {
     setIsEmergency(true);
-    setStatusMsg("🚨 EMERGENCY OVERRIDE ACTIVATED — GREEN WAVE GRANTED FOR JUNCTION NODE #1");
+    setStatusMsg(`🚨 EMERGENCY OVERRIDE ACTIVATED — GREEN WAVE GRANTED FOR ${selectedJunction.toUpperCase()}`);
     setGreenTime(90);
     setCongestion("LOW");
 
@@ -59,17 +60,20 @@ export default function App() {
 
   const exportCSV = () => {
     const timestamp = new Date().toISOString();
-    const csvContent = `data:text/csv;charset=utf-8,Timestamp,Junction,Vehicle_Count,Green_Signal_Sec,Congestion_Level\n${timestamp},Junction Node #1,${vehicleCount},${greenTime},${congestion}\n`;
+    const csvContent = `data:text/csv;charset=utf-8,Timestamp,Junction,Vehicle_Count,Green_Signal_Sec,Congestion_Level\n${timestamp},${selectedJunction},${vehicleCount},${greenTime},${congestion}\n`;
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement("a");
     link.setAttribute("href", encodedUri);
-    link.setAttribute("download", `traffic_report_${Date.now()}.csv`);
+    link.setAttribute("download", `traffic_report_${selectedJunction}_${Date.now()}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
   };
 
-  // Maps statistical values correctly to SVG pixel coordinates
+  const printPDFReport = () => {
+    window.print();
+  };
+
   const generatePath = (key, maxVal) => {
     if (trendHistory.length < 2) return "";
     const startX = 40;
@@ -86,10 +90,31 @@ export default function App() {
   return (
     <div style={styles.container}>
       <header style={styles.header}>
-        <h1 style={styles.title}>Smart Traffic AI Command Center</h1>
+        <div>
+          <h1 style={styles.title}>Smart Traffic AI Command Center</h1>
+          <div style={styles.junctionSelectorWrapper}>
+            <label style={styles.selectLabel}>Select Junction: </label>
+            <select 
+              value={selectedJunction} 
+              onChange={(e) => {
+                setSelectedJunction(e.target.value);
+                setTrendHistory([]);
+              }}
+              style={styles.selectInput}
+            >
+              <option value="node_1">Junction Node #1 (Highway North)</option>
+              <option value="node_2">Junction Node #2 (Downtown Ave)</option>
+              <option value="node_3">Junction Node #3 (Express Way Exit)</option>
+            </select>
+          </div>
+        </div>
+
         <div style={styles.headerBtns}>
           <button style={styles.csvBtn} onClick={exportCSV}>
-            📥 EXPORT CSV REPORT
+            📥 EXPORT CSV
+          </button>
+          <button style={styles.pdfBtn} onClick={printPDFReport}>
+            📄 PRINT PDF REPORT
           </button>
           <button 
             style={{
@@ -99,7 +124,7 @@ export default function App() {
             }} 
             onClick={triggerEmergency}
           >
-            🛡️ TRIGGER EMERGENCY PRIORITY
+            🛡️ EMERGENCY PRIORITY
           </button>
         </div>
       </header>
@@ -147,10 +172,11 @@ export default function App() {
 
       <div style={styles.contentGrid}>
         <div style={styles.panel}>
-          <h2 style={styles.panelTitle}>📹 Live Camera Feed — Junction Node #1</h2>
+          <h2 style={styles.panelTitle}>📹 Live Camera Feed — {selectedJunction.toUpperCase()}</h2>
           <div style={styles.videoWrapper}>
             <img
-              src={`${BACKEND_URL}/video_feed`}
+              key={selectedJunction}
+              src={`${BACKEND_URL}/video_feed?junction=${selectedJunction}`}
               alt="Live AI Traffic Feed"
               style={styles.videoStream}
             />
@@ -171,14 +197,12 @@ export default function App() {
               <text x="5" y="125" fill="#64748b" fontSize="10">25 (Cars)</text>
               <text x="15" y="175" fill="#64748b" fontSize="10">0</text>
 
-              {/* Green signal trend line (Max 100s) */}
               <path
                 d={generatePath('green', 100)}
                 fill="none"
                 stroke="#10b981"
                 strokeWidth="3"
               />
-              {/* Vehicle count trend line (Max 25 cars) */}
               <path
                 d={generatePath('count', 25)}
                 fill="none"
@@ -206,9 +230,13 @@ const styles = {
   container: { backgroundColor: '#0b1329', minHeight: '100vh', color: '#ffffff', fontFamily: 'Inter, system-ui, sans-serif', padding: '24px', boxSizing: 'border-box' },
   header: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', flexWrap: 'wrap', gap: '12px' },
   title: { fontSize: '24px', fontWeight: '700', color: '#38bdf8', margin: 0 },
-  headerBtns: { display: 'flex', gap: '12px' },
-  csvBtn: { backgroundColor: '#059669', color: '#ffffff', border: '1px solid #34d399', borderRadius: '8px', padding: '12px 18px', fontWeight: '700', fontSize: '13px', cursor: 'pointer' },
-  emergencyBtn: { color: '#ffffff', border: '1px solid', borderRadius: '8px', padding: '12px 20px', fontWeight: '700', fontSize: '13px', cursor: 'pointer', transition: 'all 0.3s ease' },
+  junctionSelectorWrapper: { marginTop: '8px', display: 'flex', alignItems: 'center', gap: '8px' },
+  selectLabel: { fontSize: '14px', color: '#94a3b8', fontWeight: '500' },
+  selectInput: { backgroundColor: '#131e3a', color: '#38bdf8', border: '1px solid #334155', borderRadius: '6px', padding: '6px 12px', fontSize: '13px', fontWeight: '600', outline: 'none', cursor: 'pointer' },
+  headerBtns: { display: 'flex', gap: '10px', flexWrap: 'wrap' },
+  csvBtn: { backgroundColor: '#059669', color: '#ffffff', border: '1px solid #34d399', borderRadius: '8px', padding: '10px 16px', fontWeight: '700', fontSize: '12px', cursor: 'pointer' },
+  pdfBtn: { backgroundColor: '#4f46e5', color: '#ffffff', border: '1px solid #818cf8', borderRadius: '8px', padding: '10px 16px', fontWeight: '700', fontSize: '12px', cursor: 'pointer' },
+  emergencyBtn: { color: '#ffffff', border: '1px solid', borderRadius: '8px', padding: '10px 18px', fontWeight: '700', fontSize: '12px', cursor: 'pointer', transition: 'all 0.3s ease' },
   statusBar: { border: '1px solid #3b82f6', padding: '12px 16px', borderRadius: '6px', marginBottom: '20px', fontSize: '14px', fontWeight: '600', textAlign: 'center' },
   statsGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '20px', marginBottom: '24px' },
   card: { backgroundColor: '#131e3a', borderRadius: '10px', padding: '20px' },

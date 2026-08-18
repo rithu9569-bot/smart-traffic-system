@@ -3,39 +3,38 @@ import cv2
 import time
 import numpy as np
 import threading
-from flask import Flask, Response, jsonify
+from flask import Flask, Response, jsonify, request
 from flask_cors import CORS
 
 app = Flask(__name__)
 CORS(app)
 
-class TrafficPipeline:
+class MultiJunctionPipeline:
     def __init__(self):
-        self.vehicle_count = 0
-        self.green_time = 30
-        self.congestion = "LOW"
         self.lock = threading.Lock()
-        
-    def get_stats(self):
-        with self.lock:
-            return {
-                "vehicle_count": self.vehicle_count,
-                "green_time": self.green_time,
-                "congestion": self.congestion
-            }
+        self.junctions = {
+            "node_1": {"name": "Junction Node #1 (Highway North)", "vehicle_count": 0, "green_time": 30, "congestion": "LOW"},
+            "node_2": {"name": "Junction Node #2 (Downtown Ave)", "vehicle_count": 0, "green_time": 25, "congestion": "LOW"},
+            "node_3": {"name": "Junction Node #3 (Express Way Exit)", "vehicle_count": 0, "green_time": 40, "congestion": "LOW"}
+        }
 
-    def update_stats(self, count):
+    def get_stats(self, junction_id):
+        with self.lock:
+            return self.junctions.get(junction_id, self.junctions["node_1"])
+
+    def update_stats(self, junction_id, count):
         calculated_green = min(90, max(15, count * 5))
         calculated_congestion = "HIGH" if count >= 10 else "MEDIUM" if count >= 5 else "LOW"
         
         with self.lock:
-            self.vehicle_count = count
-            self.green_time = calculated_green
-            self.congestion = calculated_congestion
+            if junction_id in self.junctions:
+                self.junctions[junction_id]["vehicle_count"] = count
+                self.junctions[junction_id]["green_time"] = calculated_green
+                self.junctions[junction_id]["congestion"] = calculated_congestion
 
-pipeline = TrafficPipeline()
+pipeline = MultiJunctionPipeline()
 
-def generate_video_stream():
+def generate_video_stream(junction_id):
     base_dir = os.path.dirname(os.path.abspath(__file__))
     video_path = os.path.join(base_dir, 'sample_traffic.mp4')
     if not os.path.exists(video_path):
@@ -52,22 +51,15 @@ def generate_video_stream():
 
         resized = cv2.resize(frame, (640, 360))
         
-        # Define Road-Only Polygon Mask
+        # Apply ROI mask
         mask = np.zeros(resized.shape[:2], dtype=np.uint8)
-        road_poly = np.array([
-            [20, 140],
-            [620, 140],
-            [620, 240],
-            [20, 240]
-        ], np.int32)
+        road_poly = np.array([[20, 140], [620, 140], [620, 240], [20, 240]], np.int32)
         cv2.fillPoly(mask, [road_poly], 255)
 
-        # Apply background subtraction to masked area
         blurred = cv2.GaussianBlur(resized, (5, 5), 0)
         fg_mask = bg_subtractor.apply(blurred)
         road_fg = cv2.bitwise_and(fg_mask, fg_mask, mask=mask)
 
-        # Clean noise and merge vehicle contours
         kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (5, 5))
         dilated = cv2.dilate(road_fg, kernel, iterations=2)
         
@@ -77,15 +69,12 @@ def generate_video_stream():
         for cnt in contours:
             area = cv2.contourArea(cnt)
             x, y, w, h = cv2.boundingRect(cnt)
-            
             aspect_ratio = float(w) / h if h > 0 else 0
             if 150 < area < 3000 and 0.5 < aspect_ratio < 4.0:
-                # Vehicle count calculation continues in background without drawing boxes
                 active_count += 1
 
-        pipeline.update_stats(active_count)
+        pipeline.update_stats(junction_id, active_count)
 
-        # Encode clean frame to JPEG
         ret, buffer = cv2.imencode('.jpg', resized, [int(cv2.IMWRITE_JPEG_QUALITY), 80])
         if not ret:
             continue
@@ -100,11 +89,13 @@ def generate_video_stream():
 
 @app.route('/video_feed')
 def video_feed():
-    return Response(generate_video_stream(), mimetype='multipart/x-mixed-replace; boundary=frame')
+    junction_id = request.args.get('junction', 'node_1')
+    return Response(generate_video_stream(junction_id), mimetype='multipart/x-mixed-replace; boundary=frame')
 
 @app.route('/api/stats', methods=['GET'])
 def get_stats():
-    return jsonify(pipeline.get_stats()), 200
+    junction_id = request.args.get('junction', 'node_1')
+    return jsonify(pipeline.get_stats(junction_id)), 200
 
 @app.route('/api/emergency', methods=['POST'])
 def emergency():
