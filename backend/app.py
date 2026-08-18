@@ -35,29 +35,14 @@ class MultiJunctionPipeline:
 pipeline = MultiJunctionPipeline()
 
 def generate_video_stream(junction_id):
-    base_dir = os.path.dirname(os.path.abspath(__file__))
-
-    # Local file map
-    local_files = {
-        "node_1": os.path.join(base_dir, "sample_traffic.mp4"),
-        "node_2": os.path.join(base_dir, "sample_video_2.mp4"),
-        "node_3": os.path.join(base_dir, "sample_video_3.mp4")
-    }
-
-    # Reliable direct public MP4 streams fallback
+    # Direct Cloudinary MP4 video feeds mapped to each junction node
     online_streams = {
-        "node_1": "https://vjs.zencdn.net/v/oceans.mp4",
-        "node_2": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4",
-        "node_3": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4"
+        "node_1": "https://res.cloudinary.com/hmyu5qer/video/upload/v1787052306/sample_traffic.mp4",
+        "node_2": "https://res.cloudinary.com/hmyu5qer/video/upload/v1787052229/sample_traffic_2.mp4",
+        "node_3": "https://res.cloudinary.com/hmyu5qer/video/upload/v1787052279/sample_traffic_3.mp4"
     }
 
-    target_path = local_files.get(junction_id, local_files["node_1"])
-
-    # If local file exists and is larger than 500KB, use local file; else use direct CDN stream
-    if os.path.exists(target_path) and os.path.getsize(target_path) > 500000:
-        video_source = target_path
-    else:
-        video_source = online_streams.get(junction_id, online_streams["node_1"])
+    video_source = online_streams.get(junction_id, online_streams["node_1"])
 
     cap = cv2.VideoCapture(video_source)
     bg_subtractor = cv2.createBackgroundSubtractorMOG2(history=500, varThreshold=25, detectShadows=False)
