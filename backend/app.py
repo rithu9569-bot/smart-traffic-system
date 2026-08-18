@@ -1,6 +1,7 @@
 import os
 import cv2
 import time
+import numpy as np
 import threading
 from flask import Flask, Response, jsonify
 from flask_cors import CORS
@@ -24,9 +25,8 @@ class TrafficPipeline:
             }
 
     def update_stats(self, count):
-        # Calculate signal timing dynamically: 5 seconds per detected vehicle (capped between 15s and 90s)
         calculated_green = min(90, max(15, count * 5))
-        calculated_congestion = "HIGH" if count >= 12 else "MEDIUM" if count >= 6 else "LOW"
+        calculated_congestion = "HIGH" if count >= 10 else "MEDIUM" if count >= 5 else "LOW"
         
         with self.lock:
             self.vehicle_count = count
@@ -42,9 +42,7 @@ def generate_video_stream():
         video_path = os.path.join(base_dir, '../frontend/public/sample_traffic.mp4')
 
     cap = cv2.VideoCapture(video_path if os.path.exists(video_path) else 0)
-    
-    # Tuned MOG2 parameters for smaller distant vehicles
-    bg_subtractor = cv2.createBackgroundSubtractorMOG2(history=500, varThreshold=16, detectShadows=False)
+    bg_subtractor = cv2.createBackgroundSubtractorMOG2(history=500, varThreshold=25, detectShadows=False)
 
     while True:
         ret, frame = cap.read()
@@ -54,26 +52,43 @@ def generate_video_stream():
 
         resized = cv2.resize(frame, (640, 360))
         
-        # Blur frame to reduce road surface noise
+        # 1. Define Road-Only Polygon Mask (Excludes trees at bottom and sides)
+        mask = np.zeros(resized.shape[:2], dtype=np.uint8)
+        # Polygon points matching the highway area of your video feed:
+        road_poly = np.array([
+            [20, 140],   # Top-left road edge
+            [620, 140],  # Top-right road edge
+            [620, 240],  # Bottom-right road edge (above trees)
+            [20, 240]    # Bottom-left road edge (above trees)
+        ], np.int32)
+        cv2.fillPoly(mask, [road_poly], 255)
+
+        # 2. Apply background subtraction only to masked road area
         blurred = cv2.GaussianBlur(resized, (5, 5), 0)
         fg_mask = bg_subtractor.apply(blurred)
-        
-        # Morphological operations to merge fragmented vehicle contours
+        road_fg = cv2.bitwise_and(fg_mask, fg_mask, mask=mask)
+
+        # 3. Clean noise and merge vehicle contours
         kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (5, 5))
-        dilated = cv2.dilate(fg_mask, kernel, iterations=2)
+        dilated = cv2.dilate(road_fg, kernel, iterations=2)
         
         contours, _ = cv2.findContours(dilated, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
         active_count = 0
         for cnt in contours:
             area = cv2.contourArea(cnt)
-            # Area threshold tuned for highway camera perspective (80px to 4000px)
-            if 80 < area < 4000:
-                x, y, w, h = cv2.boundingRect(cnt)
+            x, y, w, h = cv2.boundingRect(cnt)
+            
+            # 4. Filter out non-vehicle contours by size and aspect ratio
+            aspect_ratio = float(w) / h if h > 0 else 0
+            if 150 < area < 3000 and 0.5 < aspect_ratio < 4.0:
                 cv2.rectangle(resized, (x, y), (x + w, y + h), (0, 255, 0), 2)
-                cv2.putText(resized, f"Car {active_count + 1}", (x, max(15, y - 5)), 
+                cv2.putText(resized, f"Vehicle", (x, max(15, y - 5)), 
                             cv2.FONT_HERSHEY_SIMPLEX, 0.4, (0, 255, 0), 1)
                 active_count += 1
+
+        # Draw ROI boundary box line for display reference (Optional)
+        cv2.polylines(resized, [road_poly], isClosed=True, color=(255, 165, 0), thickness=1)
 
         pipeline.update_stats(active_count)
 
