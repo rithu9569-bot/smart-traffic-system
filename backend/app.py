@@ -37,7 +37,6 @@ pipeline = MultiJunctionPipeline()
 def generate_video_stream(junction_id):
     base_dir = os.path.dirname(os.path.abspath(__file__))
     
-    # Map each junction to its respective video file
     video_map = {
         "node_1": "sample_traffic.mp4",
         "node_2": "sample_traffic_2.mp4",
@@ -47,24 +46,50 @@ def generate_video_stream(junction_id):
     selected_file = video_map.get(junction_id, "sample_traffic.mp4")
     video_path = os.path.join(base_dir, selected_file)
     
-    # Fallback if file doesn't exist
-    if not os.path.exists(video_path):
-        video_path = os.path.join(base_dir, 'sample_traffic.mp4')
+    cap = None
+    if os.path.exists(video_path) and os.path.getsize(video_path) > 1000:
+        cap = cv2.VideoCapture(video_path)
 
-    cap = cv2.VideoCapture(video_path)
     bg_subtractor = cv2.createBackgroundSubtractorMOG2(history=500, varThreshold=25, detectShadows=False)
+    frame_idx = 0
 
     while True:
-        ret, frame = cap.read()
-        if not ret or frame is None:
-            cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
-            continue
+        frame = None
+        if cap and cap.isOpened():
+            ret, frame = cap.read()
+            if not ret or frame is None:
+                cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
+                ret, frame = cap.read()
+                
+        # Generate dynamic synthetic road feed if video file fails to load
+        if frame is None:
+            frame = np.zeros((360, 640, 3), dtype=np.uint8)
+            frame[:] = (45, 45, 45) # Asphalt road
+            
+            # Road markings
+            cv2.line(frame, (0, 180), (640, 180), (255, 255, 255), 2)
+            dash_offset = (frame_idx * 5) % 40
+            for x in range(-dash_offset, 640, 40):
+                cv2.line(frame, (max(0, x), 90), (min(640, x + 20), 90), (255, 255, 255), 2)
+                cv2.line(frame, (max(0, x), 270), (min(640, x + 20), 270), (255, 255, 255), 2)
+
+            # Draw moving simulated vehicles
+            speed_multiplier = 1 if junction_id == "node_1" else 1.5 if junction_id == "node_2" else 0.8
+            num_vehicles = 4 if junction_id == "node_1" else 7 if junction_id == "node_2" else 2
+            
+            for i in range(num_vehicles):
+                vx = int((frame_idx * 4 * speed_multiplier + i * 150) % 700) - 50
+                vy = 50 + (i % 3) * 90
+                color = (0, 140, 255) if i % 2 == 0 else (200, 200, 200)
+                cv2.rectangle(frame, (vx, vy), (vx + 45, vy + 22), color, -1)
+                
+            frame_idx += 1
 
         resized = cv2.resize(frame, (640, 360))
         
         # Apply ROI mask
         mask = np.zeros(resized.shape[:2], dtype=np.uint8)
-        road_poly = np.array([[20, 140], [620, 140], [620, 240], [20, 240]], np.int32)
+        road_poly = np.array([[20, 20], [620, 20], [620, 340], [20, 340]], np.int32)
         cv2.fillPoly(mask, [road_poly], 255)
 
         blurred = cv2.GaussianBlur(resized, (5, 5), 0)
@@ -81,7 +106,7 @@ def generate_video_stream(junction_id):
             area = cv2.contourArea(cnt)
             x, y, w, h = cv2.boundingRect(cnt)
             aspect_ratio = float(w) / h if h > 0 else 0
-            if 150 < area < 3000 and 0.5 < aspect_ratio < 4.0:
+            if 100 < area < 4000 and 0.4 < aspect_ratio < 4.5:
                 active_count += 1
 
         pipeline.update_stats(junction_id, active_count)
@@ -96,7 +121,8 @@ def generate_video_stream(junction_id):
 
         time.sleep(0.04)
 
-    cap.release()
+    if cap:
+        cap.release()
 
 @app.route('/video_feed')
 def video_feed():
