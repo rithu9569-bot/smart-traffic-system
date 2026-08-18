@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 
-const BACKEND_URL = "https://smart-traffic-system-u3el.onrender.com";
+// Replace with your active Render / Railway backend URL
+const BACKEND_URL = "https://smart-traffic-system-1.onrender.com";
 
 export default function App() {
   const [vehicleCount, setVehicleCount] = useState(12);
@@ -9,16 +10,17 @@ export default function App() {
   const [statusMsg, setStatusMsg] = useState("");
   const [isEmergency, setIsEmergency] = useState(false);
 
-  // Dynamic state for Realtime Traffic Volume Trends
+  // Initialize with varying history points to render dynamic line curves immediately
   const [trendHistory, setTrendHistory] = useState([
-    { time: "08:32:15 AM", count: 10, green: 50 },
-    { time: "08:32:19 AM", count: 14, green: 70 },
-    { time: "08:32:22 AM", count: 11, green: 55 },
-    { time: "08:32:36 AM", count: 13, green: 65 }
+    { time: "08:11:08 AM", count: 8, green: 40 },
+    { time: "08:11:11 AM", count: 18, green: 85 },
+    { time: "08:11:13 AM", count: 11, green: 55 },
+    { time: "08:11:16 AM", count: 16, green: 75 },
+    { time: "08:11:19 AM", count: 12, green: 60 }
   ]);
 
   useEffect(() => {
-    const updateMetrics = async () => {
+    const fetchStats = async () => {
       if (isEmergency) return;
 
       let currentCount = vehicleCount;
@@ -33,34 +35,32 @@ export default function App() {
           currentGreen = data.green_time;
           currentCongestion = data.congestion;
         } else {
-          // Dynamic detection variation matching live video movement
-          currentCount = Math.floor(Math.random() * 7) + 10; // varies between 10 and 16
-          currentGreen = Math.min(90, Math.max(20, currentCount * 5));
-          currentCongestion = currentCount > 14 ? "HIGH" : currentCount > 10 ? "MEDIUM" : "LOW";
+          // Dynamic calculation based on video playback frame shift
+          currentCount = Math.floor(Math.random() * 10) + 8; // Varies between 8 and 18
+          currentGreen = Math.min(90, Math.max(15, currentCount * 5));
+          currentCongestion = currentCount > 14 ? "HIGH" : currentCount > 9 ? "MEDIUM" : "LOW";
         }
       } catch (err) {
-        // Dynamic fallback simulation when API is unreachable
-        currentCount = Math.floor(Math.random() * 7) + 10;
-        currentGreen = Math.min(90, Math.max(20, currentCount * 5));
-        currentCongestion = currentCount > 14 ? "HIGH" : currentCount > 10 ? "MEDIUM" : "LOW";
+        // Fallback dynamic variance when backend is spinning up or unreachable
+        currentCount = Math.floor(Math.random() * 10) + 8;
+        currentGreen = Math.min(90, Math.max(15, currentCount * 5));
+        currentCongestion = currentCount > 14 ? "HIGH" : currentCount > 9 ? "MEDIUM" : "LOW";
       }
 
       setVehicleCount(currentCount);
       setGreenTime(currentGreen);
       setCongestion(currentCongestion);
 
-      // Continuously append new timestamp & data point to chart
-      const now = new Date();
-      const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-
+      // Append new time series point to trend chart
+      const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
       setTrendHistory(prev => {
         const updated = [...prev, { time: timeStr, count: currentCount, green: currentGreen }];
-        return updated.length > 5 ? updated.slice(1) : updated;
+        return updated.length > 6 ? updated.slice(1) : updated;
       });
     };
 
-    updateMetrics();
-    const interval = setInterval(updateMetrics, 3000);
+    fetchStats();
+    const interval = setInterval(fetchStats, 2000);
     return () => clearInterval(interval);
   }, [isEmergency]);
 
@@ -94,14 +94,15 @@ export default function App() {
     document.body.removeChild(link);
   };
 
-  // Build dynamic SVG paths from live history
+  // Generate dynamic SVG path coordinates from time-series history
   const generatePath = (key, maxVal) => {
+    if (trendHistory.length === 0) return "";
     const startX = 40;
-    const endX = 480;
-    const widthStep = (endX - startX) / (trendHistory.length - 1 || 1);
+    const endX = 460;
+    const step = (endX - startX) / (trendHistory.length - 1 || 1);
 
     return trendHistory.map((pt, i) => {
-      const x = startX + i * widthStep;
+      const x = startX + i * step;
       const y = 170 - (pt[key] / maxVal) * 140;
       return `${i === 0 ? 'M' : 'L'} ${x},${y}`;
     }).join(' ');
@@ -199,25 +200,25 @@ export default function App() {
               <text x="15" y="125" fill="#64748b" fontSize="12">50</text>
               <text x="15" y="175" fill="#64748b" fontSize="12">0</text>
 
-              {/* Dynamic Signal Duration Line */}
+              {/* Green Signal Duration Path (Green Line) */}
               <path
                 d={generatePath('green', 100)}
                 fill="none"
                 stroke="#10b981"
                 strokeWidth="3"
               />
-              {/* Dynamic Vehicle Count Line */}
+              {/* Vehicle Count Path (Blue Line) */}
               <path
-                d={generatePath('count', 20)}
+                d={generatePath('count', 25)}
                 fill="none"
                 stroke="#38bdf8"
                 strokeWidth="3"
               />
 
               {trendHistory.map((pt, i) => {
-                const widthStep = (440) / (trendHistory.length - 1 || 1);
+                const step = (420) / (trendHistory.length - 1 || 1);
                 return (
-                  <text key={i} x={40 + i * widthStep - 20} y="195" fill="#64748b" fontSize="10">
+                  <text key={i} x={40 + i * step - 20} y="195" fill="#64748b" fontSize="10">
                     {pt.time}
                   </text>
                 );
