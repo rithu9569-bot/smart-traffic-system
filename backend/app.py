@@ -52,23 +52,22 @@ def generate_video_stream():
 
         resized = cv2.resize(frame, (640, 360))
         
-        # 1. Define Road-Only Polygon Mask (Excludes trees at bottom and sides)
+        # Define Road-Only Polygon Mask
         mask = np.zeros(resized.shape[:2], dtype=np.uint8)
-        # Polygon points matching the highway area of your video feed:
         road_poly = np.array([
-            [20, 140],   # Top-left road edge
-            [620, 140],  # Top-right road edge
-            [620, 240],  # Bottom-right road edge (above trees)
-            [20, 240]    # Bottom-left road edge (above trees)
+            [20, 140],
+            [620, 140],
+            [620, 240],
+            [20, 240]
         ], np.int32)
         cv2.fillPoly(mask, [road_poly], 255)
 
-        # 2. Apply background subtraction only to masked road area
+        # Apply background subtraction to masked area
         blurred = cv2.GaussianBlur(resized, (5, 5), 0)
         fg_mask = bg_subtractor.apply(blurred)
         road_fg = cv2.bitwise_and(fg_mask, fg_mask, mask=mask)
 
-        # 3. Clean noise and merge vehicle contours
+        # Clean noise and merge vehicle contours
         kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (5, 5))
         dilated = cv2.dilate(road_fg, kernel, iterations=2)
         
@@ -79,19 +78,14 @@ def generate_video_stream():
             area = cv2.contourArea(cnt)
             x, y, w, h = cv2.boundingRect(cnt)
             
-            # 4. Filter out non-vehicle contours by size and aspect ratio
             aspect_ratio = float(w) / h if h > 0 else 0
             if 150 < area < 3000 and 0.5 < aspect_ratio < 4.0:
-                cv2.rectangle(resized, (x, y), (x + w, y + h), (0, 255, 0), 2)
-                cv2.putText(resized, f"Vehicle", (x, max(15, y - 5)), 
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.4, (0, 255, 0), 1)
+                # Vehicle count calculation continues in background without drawing boxes
                 active_count += 1
-
-        # Draw ROI boundary box line for display reference (Optional)
-        cv2.polylines(resized, [road_poly], isClosed=True, color=(255, 165, 0), thickness=1)
 
         pipeline.update_stats(active_count)
 
+        # Encode clean frame to JPEG
         ret, buffer = cv2.imencode('.jpg', resized, [int(cv2.IMWRITE_JPEG_QUALITY), 80])
         if not ret:
             continue
