@@ -37,34 +37,38 @@ pipeline = MultiJunctionPipeline()
 def generate_video_stream(junction_id):
     base_dir = os.path.dirname(os.path.abspath(__file__))
     
-    # Map each node strictly to its designated video file
-    video_files = {
-        "node_1": "sample_traffic.mp4",
-        "node_2": "sample_traffic_2.mp4",
-        "node_3": "sample_traffic_3.mp4"
+    # Map each node to its respective video feed (Local files or reliable MP4 video sources)
+    node_streams = {
+        "node_1": os.path.join(base_dir, "sample_traffic.mp4"),
+        "node_2": "https://raw.githubusercontent.com/intel-iot-devkit/sample-videos/master/car-detection.mp4",
+        "node_3": "https://raw.githubusercontent.com/intel-iot-devkit/sample-videos/master/free-way-traffic.mp4"
     }
-    
-    target_file = video_files.get(junction_id, "sample_traffic.mp4")
-    video_path = os.path.join(base_dir, target_file)
 
-    # Fallback to Node 1 video if specific node video file is missing locally
-    if not os.path.exists(video_path):
-        video_path = os.path.join(base_dir, 'sample_traffic.mp4')
+    # Fallback check for Node 1 local file
+    source = node_streams.get(junction_id, node_streams["node_1"])
+    if junction_id == "node_1" and not (os.path.exists(source) and os.path.getsize(source) > 100000):
+        source = "https://raw.githubusercontent.com/intel-iot-devkit/sample-videos/master/traffic.mp4"
 
-    cap = cv2.VideoCapture(video_path)
+    cap = cv2.VideoCapture(source)
     bg_subtractor = cv2.createBackgroundSubtractorMOG2(history=500, varThreshold=25, detectShadows=False)
 
     while True:
         ret, frame = cap.read()
         if not ret or frame is None:
             cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
-            continue
+            ret, frame = cap.read()
+            if not ret or frame is None:
+                # Restart stream connection if connection drops
+                cap.release()
+                time.sleep(0.5)
+                cap = cv2.VideoCapture(source)
+                continue
 
         resized = cv2.resize(frame, (640, 360))
         
-        # Apply ROI mask
+        # Define Detection Area Mask
         mask = np.zeros(resized.shape[:2], dtype=np.uint8)
-        road_poly = np.array([[20, 140], [620, 140], [620, 240], [20, 240]], np.int32)
+        road_poly = np.array([[10, 50], [630, 50], [630, 350], [10, 350]], np.int32)
         cv2.fillPoly(mask, [road_poly], 255)
 
         blurred = cv2.GaussianBlur(resized, (5, 5), 0)
@@ -81,7 +85,7 @@ def generate_video_stream(junction_id):
             area = cv2.contourArea(cnt)
             x, y, w, h = cv2.boundingRect(cnt)
             aspect_ratio = float(w) / h if h > 0 else 0
-            if 150 < area < 3000 and 0.5 < aspect_ratio < 4.0:
+            if 100 < area < 4500 and 0.3 < aspect_ratio < 4.5:
                 active_count += 1
 
         pipeline.update_stats(junction_id, active_count)
