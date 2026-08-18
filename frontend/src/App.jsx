@@ -92,15 +92,15 @@ export default function App() {
       <header style={styles.header}>
         <div>
           <h1 style={styles.title}>Smart Traffic AI Command Center</h1>
-          <div style={styles.junctionSelectorWrapper}>
+          <div style={styles.selectWrapper}>
             <label style={styles.selectLabel}>Select Junction: </label>
-            <select 
-              value={selectedJunction} 
+            <select
+              value={selectedJunction}
               onChange={(e) => {
                 setSelectedJunction(e.target.value);
                 setTrendHistory([]);
               }}
-              style={styles.selectInput}
+              style={styles.select}
             >
               <option value="node_1">Junction Node #1 (Highway North)</option>
               <option value="node_2">Junction Node #2 (Downtown Ave)</option>
@@ -111,7 +111,7 @@ export default function App() {
 
         <div style={styles.headerBtns}>
           <button style={styles.csvBtn} onClick={exportCSV}>
-            📥 EXPORT CSV
+            📥 EXPORT CSV REPORT
           </button>
           <button style={styles.pdfBtn} onClick={printPDFReport}>
             📄 PRINT PDF REPORT
@@ -175,7 +175,6 @@ export default function App() {
           <h2 style={styles.panelTitle}>📹 Live Camera Feed — {selectedJunction.toUpperCase()}</h2>
           <div style={styles.videoWrapper}>
             <img
-              key={selectedJunction}
               src={`${BACKEND_URL}/video_feed?junction=${selectedJunction}`}
               alt="Live AI Traffic Feed"
               style={styles.videoStream}
@@ -230,9 +229,9 @@ const styles = {
   container: { backgroundColor: '#0b1329', minHeight: '100vh', color: '#ffffff', fontFamily: 'Inter, system-ui, sans-serif', padding: '24px', boxSizing: 'border-box' },
   header: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', flexWrap: 'wrap', gap: '12px' },
   title: { fontSize: '24px', fontWeight: '700', color: '#38bdf8', margin: 0 },
-  junctionSelectorWrapper: { marginTop: '8px', display: 'flex', alignItems: 'center', gap: '8px' },
-  selectLabel: { fontSize: '14px', color: '#94a3b8', fontWeight: '500' },
-  selectInput: { backgroundColor: '#131e3a', color: '#38bdf8', border: '1px solid #334155', borderRadius: '6px', padding: '6px 12px', fontSize: '13px', fontWeight: '600', outline: 'none', cursor: 'pointer' },
+  selectWrapper: { marginTop: '8px', display: 'flex', alignItems: 'center', gap: '8px' },
+  selectLabel: { fontSize: '14px', color: '#94a3b8' },
+  select: { backgroundColor: '#131e3a', color: '#38bdf8', border: '1px solid #1e293b', borderRadius: '6px', padding: '6px 12px', fontWeight: '600', cursor: 'pointer' },
   headerBtns: { display: 'flex', gap: '10px', flexWrap: 'wrap' },
   csvBtn: { backgroundColor: '#059669', color: '#ffffff', border: '1px solid #34d399', borderRadius: '8px', padding: '10px 16px', fontWeight: '700', fontSize: '12px', cursor: 'pointer' },
   pdfBtn: { backgroundColor: '#4f46e5', color: '#ffffff', border: '1px solid #818cf8', borderRadius: '8px', padding: '10px 16px', fontWeight: '700', fontSize: '12px', cursor: 'pointer' },
@@ -247,8 +246,8 @@ const styles = {
   contentGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(420px, 1fr))', gap: '20px' },
   panel: { backgroundColor: '#131e3a', borderRadius: '10px', padding: '20px' },
   panelTitle: { fontSize: '16px', fontWeight: '600', color: '#38bdf8', marginTop: 0, marginBottom: '16px' },
-  videoWrapper: { width: '100%', height: '280px', backgroundColor: '#000000', borderRadius: '8px', overflow: 'hidden' },
-  videoStream: { width: '100%', height: '100%', objectFit: 'cover' },
+  videoWrapper: { width: '100%', height: '280px', backgroundColor: '#000000', borderRadius: '8px', overflow: 'hidden', display: 'flex', justifyContent: 'center', alignItems: 'center' },
+  videoStream: { width: '100%', height: '100%', objectFit: 'contain' },
   chartContainer: { width: '100%', height: '280px', display: 'flex', alignItems: 'center' },
   svgChart: { width: '100%', height: '100%' }
 };
