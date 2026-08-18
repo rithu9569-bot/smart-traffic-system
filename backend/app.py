@@ -13,9 +13,9 @@ class MultiJunctionPipeline:
     def __init__(self):
         self.lock = threading.Lock()
         self.junctions = {
-            "node_1": {"name": "Junction Node #1 (Highway North)", "vehicle_count": 0, "green_time": 30, "congestion": "LOW"},
-            "node_2": {"name": "Junction Node #2 (Downtown Ave)", "vehicle_count": 0, "green_time": 30, "congestion": "LOW"},
-            "node_3": {"name": "Junction Node #3 (Expressway Exit)", "vehicle_count": 0, "green_time": 30, "congestion": "LOW"}
+            "node_1": {"name": "Junction Node #1 (Highway North)", "vehicle_count": 0, "green_time": 20, "congestion": "LOW"},
+            "node_2": {"name": "Junction Node #2 (Downtown Ave)", "vehicle_count": 0, "green_time": 20, "congestion": "LOW"},
+            "node_3": {"name": "Junction Node #3 (Expressway Exit)", "vehicle_count": 0, "green_time": 20, "congestion": "LOW"}
         }
 
     def get_stats(self, junction_id):
@@ -23,8 +23,9 @@ class MultiJunctionPipeline:
             return self.junctions.get(junction_id, self.junctions["node_1"])
 
     def update_stats(self, junction_id, count):
-        calculated_green = min(90, max(15, count * 5))
-        calculated_congestion = "HIGH" if count >= 10 else "MEDIUM" if count >= 5 else "LOW"
+        # Calculate realistic signal timing & congestion based on actual vehicle counts
+        calculated_green = min(90, max(15, count * 10 + 10))
+        calculated_congestion = "HIGH" if count >= 8 else "MEDIUM" if count >= 4 else "LOW"
         
         with self.lock:
             if junction_id in self.junctions:
@@ -35,7 +36,6 @@ class MultiJunctionPipeline:
 pipeline = MultiJunctionPipeline()
 
 def generate_video_stream(junction_id):
-    # Direct Cloudinary MP4 video feeds mapped to each junction node
     online_streams = {
         "node_1": "https://res.cloudinary.com/hmyu5qer/video/upload/v1787052306/sample_traffic.mp4",
         "node_2": "https://res.cloudinary.com/hmyu5qer/video/upload/v1787052229/sample_traffic_2.mp4",
@@ -45,7 +45,8 @@ def generate_video_stream(junction_id):
     video_source = online_streams.get(junction_id, online_streams["node_1"])
 
     cap = cv2.VideoCapture(video_source)
-    bg_subtractor = cv2.createBackgroundSubtractorMOG2(history=500, varThreshold=25, detectShadows=False)
+    # Calibrated background subtractor settings for video feeds
+    bg_subtractor = cv2.createBackgroundSubtractorMOG2(history=300, varThreshold=50, detectShadows=True)
 
     while True:
         ret, frame = cap.read()
@@ -60,15 +61,19 @@ def generate_video_stream(junction_id):
 
         resized = cv2.resize(frame, (640, 360))
         
+        # Define Region of Interest (ROI) covering main road lanes only
         mask = np.zeros(resized.shape[:2], dtype=np.uint8)
-        road_poly = np.array([[10, 50], [630, 50], [630, 350], [10, 350]], np.int32)
+        road_poly = np.array([[40, 100], [600, 100], [620, 350], [20, 350]], np.int32)
         cv2.fillPoly(mask, [road_poly], 255)
 
-        blurred = cv2.GaussianBlur(resized, (5, 5), 0)
+        blurred = cv2.GaussianBlur(resized, (7, 7), 0)
         fg_mask = bg_subtractor.apply(blurred)
-        road_fg = cv2.bitwise_and(fg_mask, fg_mask, mask=mask)
+        
+        # Remove shadows (shadow value in OpenCV MOG2 is 127)
+        _, thresh = cv2.threshold(fg_mask, 200, 255, cv2.THRESH_BINARY)
+        road_fg = cv2.bitwise_and(thresh, thresh, mask=mask)
 
-        kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (5, 5))
+        kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (7, 7))
         dilated = cv2.dilate(road_fg, kernel, iterations=2)
         
         contours, _ = cv2.findContours(dilated, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
@@ -78,8 +83,13 @@ def generate_video_stream(junction_id):
             area = cv2.contourArea(cnt)
             x, y, w, h = cv2.boundingRect(cnt)
             aspect_ratio = float(w) / h if h > 0 else 0
-            if 100 < area < 4500 and 0.3 < aspect_ratio < 4.5:
+            
+            # Strict contour size filter matching actual vehicle proportions (cars/trucks)
+            if 1200 < area < 15000 and 0.4 < aspect_ratio < 2.5:
                 active_count += 1
+                # Draw bounding box on video stream
+                cv2.rectangle(resized, (x, y), (x + w, y + h), (0, 255, 0), 2)
+                cv2.putText(resized, "Vehicle", (x, y - 5), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
 
         pipeline.update_stats(junction_id, active_count)
 
