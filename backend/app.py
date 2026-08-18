@@ -14,8 +14,8 @@ class MultiJunctionPipeline:
         self.lock = threading.Lock()
         self.junctions = {
             "node_1": {"name": "Junction Node #1 (Highway North)", "vehicle_count": 0, "green_time": 30, "congestion": "LOW"},
-            "node_2": {"name": "Junction Node #2 (Downtown Ave)", "vehicle_count": 0, "green_time": 25, "congestion": "LOW"},
-            "node_3": {"name": "Junction Node #3 (Express Way Exit)", "vehicle_count": 0, "green_time": 40, "congestion": "LOW"}
+            "node_2": {"name": "Junction Node #2 (Downtown Ave)", "vehicle_count": 0, "green_time": 30, "congestion": "LOW"},
+            "node_3": {"name": "Junction Node #3 (Expressway Exit)", "vehicle_count": 0, "green_time": 30, "congestion": "LOW"}
         }
 
     def get_stats(self, junction_id):
@@ -36,11 +36,22 @@ pipeline = MultiJunctionPipeline()
 
 def generate_video_stream(junction_id):
     base_dir = os.path.dirname(os.path.abspath(__file__))
-    video_path = os.path.join(base_dir, 'sample_traffic.mp4')
+    
+    # Map each junction to its respective video file
+    video_map = {
+        "node_1": "sample_traffic.mp4",
+        "node_2": "sample_traffic_2.mp4",
+        "node_3": "sample_traffic_3.mp4"
+    }
+    
+    selected_file = video_map.get(junction_id, "sample_traffic.mp4")
+    video_path = os.path.join(base_dir, selected_file)
+    
+    # Fallback if file doesn't exist
     if not os.path.exists(video_path):
-        video_path = os.path.join(base_dir, '../frontend/public/sample_traffic.mp4')
+        video_path = os.path.join(base_dir, 'sample_traffic.mp4')
 
-    cap = cv2.VideoCapture(video_path if os.path.exists(video_path) else 0)
+    cap = cv2.VideoCapture(video_path)
     bg_subtractor = cv2.createBackgroundSubtractorMOG2(history=500, varThreshold=25, detectShadows=False)
 
     while True:
