@@ -35,56 +35,70 @@ class MultiJunctionPipeline:
 pipeline = MultiJunctionPipeline()
 
 def generate_video_stream(junction_id):
-    # Unique traffic density and speeds per junction
-    speeds = {"node_1": 4, "node_2": 7, "node_3": 5}
-    car_counts = {"node_1": 7, "node_2": 14, "node_3": 9}
-    
-    num_cars = car_counts.get(junction_id, 7)
-    speed = speeds.get(junction_id, 4)
-    
-    np.random.seed(hash(junction_id) % 10000)
-    cars = []
-    for _ in range(num_cars):
-        cars.append({
-            'x': int(np.random.randint(40, 600)),
-            'y': int(np.random.randint(-50, 350)),
-            'color': (int(np.random.randint(50, 250)), int(np.random.randint(50, 250)), int(np.random.randint(50, 250)))
-        })
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+
+    # Local file map
+    local_files = {
+        "node_1": os.path.join(base_dir, "sample_traffic.mp4"),
+        "node_2": os.path.join(base_dir, "sample_video_2.mp4"),
+        "node_3": os.path.join(base_dir, "sample_video_3.mp4")
+    }
+
+    # Reliable direct public MP4 streams fallback
+    online_streams = {
+        "node_1": "https://vjs.zencdn.net/v/oceans.mp4",
+        "node_2": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4",
+        "node_3": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4"
+    }
+
+    target_path = local_files.get(junction_id, local_files["node_1"])
+
+    # If local file exists and is larger than 500KB, use local file; else use direct CDN stream
+    if os.path.exists(target_path) and os.path.getsize(target_path) > 500000:
+        video_source = target_path
+    else:
+        video_source = online_streams.get(junction_id, online_streams["node_1"])
+
+    cap = cv2.VideoCapture(video_source)
+    bg_subtractor = cv2.createBackgroundSubtractorMOG2(history=500, varThreshold=25, detectShadows=False)
 
     while True:
-        # Asphalt road background
-        frame = np.full((360, 640, 3), (35, 40, 50), dtype=np.uint8)
+        ret, frame = cap.read()
+        if not ret or frame is None:
+            cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
+            ret, frame = cap.read()
+            if not ret or frame is None:
+                cap.release()
+                time.sleep(0.2)
+                cap = cv2.VideoCapture(video_source)
+                continue
+
+        resized = cv2.resize(frame, (640, 360))
         
-        # Lane Dividers
-        cv2.line(frame, (213, 0), (213, 360), (255, 255, 255), 2, cv2.LINE_AA)
-        cv2.line(frame, (426, 0), (426, 360), (255, 255, 255), 2, cv2.LINE_AA)
+        mask = np.zeros(resized.shape[:2], dtype=np.uint8)
+        road_poly = np.array([[10, 50], [630, 50], [630, 350], [10, 350]], np.int32)
+        cv2.fillPoly(mask, [road_poly], 255)
+
+        blurred = cv2.GaussianBlur(resized, (5, 5), 0)
+        fg_mask = bg_subtractor.apply(blurred)
+        road_fg = cv2.bitwise_and(fg_mask, fg_mask, mask=mask)
+
+        kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (5, 5))
+        dilated = cv2.dilate(road_fg, kernel, iterations=2)
         
-        for y_pos in range(0, 360, 40):
-            cv2.line(frame, (106, y_pos), (106, y_pos + 20), (180, 180, 180), 1)
-            cv2.line(frame, (320, y_pos), (320, y_pos + 20), (180, 180, 180), 1)
-            cv2.line(frame, (533, y_pos), (533, y_pos + 20), (180, 180, 180), 1)
+        contours, _ = cv2.findContours(dilated, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
-        active_cars = 0
-        for car in cars:
-            car['y'] += speed
-            if car['y'] > 380:
-                car['y'] = -50
-                car['x'] = int(np.random.randint(40, 600))
+        active_count = 0
+        for cnt in contours:
+            area = cv2.contourArea(cnt)
+            x, y, w, h = cv2.boundingRect(cnt)
+            aspect_ratio = float(w) / h if h > 0 else 0
+            if 100 < area < 4500 and 0.3 < aspect_ratio < 4.5:
+                active_count += 1
 
-            x, y = car['x'], car['y']
-            if -50 <= y <= 400:
-                active_cars += 1
-                # Vehicle body
-                cv2.rectangle(frame, (x, y), (x + 28, y + 50), car['color'], -1)
-                # Windshield
-                cv2.rectangle(frame, (x + 4, y + 10), (x + 24, y + 20), (210, 230, 250), -1)
-                # Headlights
-                cv2.circle(frame, (x + 6, y + 2), 2, (0, 255, 255), -1)
-                cv2.circle(frame, (x + 22, y + 2), 2, (0, 255, 255), -1)
+        pipeline.update_stats(junction_id, active_count)
 
-        pipeline.update_stats(junction_id, active_cars)
-
-        ret, buffer = cv2.imencode('.jpg', frame, [int(cv2.IMWRITE_JPEG_QUALITY), 85])
+        ret, buffer = cv2.imencode('.jpg', resized, [int(cv2.IMWRITE_JPEG_QUALITY), 80])
         if not ret:
             continue
             
@@ -93,6 +107,8 @@ def generate_video_stream(junction_id):
                b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
 
         time.sleep(0.04)
+
+    cap.release()
 
 @app.route('/video_feed')
 def video_feed():
