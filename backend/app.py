@@ -36,21 +36,22 @@ pipeline = MultiJunctionPipeline()
 
 def generate_video_stream(junction_id):
     base_dir = os.path.dirname(os.path.abspath(__file__))
-    
-    # Try assigned video files first, fallback to sample_traffic.mp4
-    node_files = {
-        "node_1": "sample_traffic.mp4",
-        "node_2": "sample_traffic_2.mp4",
-        "node_3": "sample_traffic_3.mp4"
+    local_node1 = os.path.join(base_dir, 'sample_traffic.mp4')
+
+    # Direct fallback video streams guaranteed to work on cloud servers
+    online_streams = {
+        "node_1": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4",
+        "node_2": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4",
+        "node_3": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerFun.mp4"
     }
 
-    filename = node_files.get(junction_id, "sample_traffic.mp4")
-    target_path = os.path.join(base_dir, filename)
+    # Use local file if valid, otherwise fallback to direct HTTPS video stream
+    if junction_id == "node_1" and os.path.exists(local_node1) and os.path.getsize(local_node1) > 100000:
+        source = local_node1
+    else:
+        source = online_streams.get(junction_id, online_streams["node_1"])
 
-    if not (os.path.exists(target_path) and os.path.getsize(target_path) > 100000):
-        target_path = os.path.join(base_dir, "sample_traffic.mp4")
-
-    cap = cv2.VideoCapture(target_path)
+    cap = cv2.VideoCapture(source)
     bg_subtractor = cv2.createBackgroundSubtractorMOG2(history=500, varThreshold=25, detectShadows=False)
 
     while True:
@@ -59,7 +60,9 @@ def generate_video_stream(junction_id):
             cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
             ret, frame = cap.read()
             if not ret or frame is None:
-                time.sleep(0.1)
+                cap.release()
+                time.sleep(0.2)
+                cap = cv2.VideoCapture(source)
                 continue
 
         resized = cv2.resize(frame, (640, 360))
