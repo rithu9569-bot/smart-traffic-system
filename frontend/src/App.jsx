@@ -18,45 +18,44 @@ export default function App() {
   ]);
 
   useEffect(() => {
-    const fetchStats = async () => {
+    const updateRealtimeMetrics = async () => {
       if (isEmergency) return;
 
-      let currentCount = vehicleCount;
-      let currentGreen = greenTime;
-      let currentCongestion = congestion;
+      // Calculate instant dynamic shifts for fallback/offline mode
+      const simulatedCount = Math.floor(Math.random() * 16) + 5; // Random count between 5 and 20
+      const simulatedGreen = Math.min(90, Math.max(15, simulatedCount * 4 + 10));
+      const simulatedCongestion = simulatedCount > 14 ? "HIGH" : simulatedCount > 9 ? "MEDIUM" : "LOW";
+
+      let nextCount = simulatedCount;
+      let nextGreen = simulatedGreen;
+      let nextCongestion = simulatedCongestion;
 
       try {
         const res = await fetch(`${BACKEND_URL}/api/stats`);
         if (res.ok) {
           const data = await res.json();
-          currentCount = data.vehicle_count;
-          currentGreen = data.green_time;
-          currentCongestion = data.congestion;
-        } else {
-          currentCount = Math.floor(Math.random() * 12) + 6;
-          currentGreen = Math.min(90, Math.max(15, currentCount * 5));
-          currentCongestion = currentCount > 14 ? "HIGH" : currentCount > 9 ? "MEDIUM" : "LOW";
+          nextCount = data.vehicle_count;
+          nextGreen = data.green_time;
+          nextCongestion = data.congestion;
         }
       } catch (err) {
-        currentCount = Math.floor(Math.random() * 12) + 6;
-        currentGreen = Math.min(90, Math.max(15, currentCount * 5));
-        currentCongestion = currentCount > 14 ? "HIGH" : currentCount > 9 ? "MEDIUM" : "LOW";
+        // Fallback directly uses the newly calculated simulated values on every tick
       }
 
-      setVehicleCount(currentCount);
-      setGreenTime(currentGreen);
-      setCongestion(currentCongestion);
+      setVehicleCount(nextCount);
+      setGreenTime(nextGreen);
+      setCongestion(nextCongestion);
 
       const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
       setTrendHistory(prev => {
-        const updated = [...prev, { time: timeStr, count: currentCount, green: currentGreen }];
+        const updated = [...prev, { time: timeStr, count: nextCount, green: nextGreen }];
         return updated.length > 8 ? updated.slice(1) : updated;
       });
     };
 
-    fetchStats();
-    // Reduced interval from 2000ms to 200ms for high-frequency instant changes
-    const interval = setInterval(fetchStats, 200);
+    updateRealtimeMetrics();
+    // High-frequency polling (400ms) to ensure continuous visual updates
+    const interval = setInterval(updateRealtimeMetrics, 400);
     return () => clearInterval(interval);
   }, [isEmergency]);
 
