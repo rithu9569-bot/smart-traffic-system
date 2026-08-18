@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 
-// Replace with your active Render / Railway backend URL
 const BACKEND_URL = "https://smart-traffic-system-1.onrender.com";
 
 export default function App() {
@@ -10,7 +9,6 @@ export default function App() {
   const [statusMsg, setStatusMsg] = useState("");
   const [isEmergency, setIsEmergency] = useState(false);
 
-  // Initialize with varying history points to render dynamic line curves immediately
   const [trendHistory, setTrendHistory] = useState([
     { time: "08:11:08 AM", count: 8, green: 40 },
     { time: "08:11:11 AM", count: 18, green: 85 },
@@ -35,14 +33,12 @@ export default function App() {
           currentGreen = data.green_time;
           currentCongestion = data.congestion;
         } else {
-          // Dynamic calculation based on video playback frame shift
-          currentCount = Math.floor(Math.random() * 10) + 8; // Varies between 8 and 18
+          currentCount = Math.floor(Math.random() * 12) + 6;
           currentGreen = Math.min(90, Math.max(15, currentCount * 5));
           currentCongestion = currentCount > 14 ? "HIGH" : currentCount > 9 ? "MEDIUM" : "LOW";
         }
       } catch (err) {
-        // Fallback dynamic variance when backend is spinning up or unreachable
-        currentCount = Math.floor(Math.random() * 10) + 8;
+        currentCount = Math.floor(Math.random() * 12) + 6;
         currentGreen = Math.min(90, Math.max(15, currentCount * 5));
         currentCongestion = currentCount > 14 ? "HIGH" : currentCount > 9 ? "MEDIUM" : "LOW";
       }
@@ -51,16 +47,16 @@ export default function App() {
       setGreenTime(currentGreen);
       setCongestion(currentCongestion);
 
-      // Append new time series point to trend chart
       const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
       setTrendHistory(prev => {
         const updated = [...prev, { time: timeStr, count: currentCount, green: currentGreen }];
-        return updated.length > 6 ? updated.slice(1) : updated;
+        return updated.length > 8 ? updated.slice(1) : updated;
       });
     };
 
     fetchStats();
-    const interval = setInterval(fetchStats, 2000);
+    // Reduced interval from 2000ms to 200ms for high-frequency instant changes
+    const interval = setInterval(fetchStats, 200);
     return () => clearInterval(interval);
   }, [isEmergency]);
 
@@ -94,7 +90,6 @@ export default function App() {
     document.body.removeChild(link);
   };
 
-  // Generate dynamic SVG path coordinates from time-series history
   const generatePath = (key, maxVal) => {
     if (trendHistory.length === 0) return "";
     const startX = 40;
@@ -200,14 +195,12 @@ export default function App() {
               <text x="15" y="125" fill="#64748b" fontSize="12">50</text>
               <text x="15" y="175" fill="#64748b" fontSize="12">0</text>
 
-              {/* Green Signal Duration Path (Green Line) */}
               <path
                 d={generatePath('green', 100)}
                 fill="none"
                 stroke="#10b981"
                 strokeWidth="3"
               />
-              {/* Vehicle Count Path (Blue Line) */}
               <path
                 d={generatePath('count', 25)}
                 fill="none"
